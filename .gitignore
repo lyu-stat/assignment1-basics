@@ -161,3 +161,33 @@ cython_debug/
 
 .ruff_cache/
 *.zip
+
+# Secrets
+.env
+*.pem
+
+# Data
+data/
+datasets/
+*.csv
+*.parquet
+*.npy
+*.h5
+
+# Trained tokenizer
+trained_tokenizer/
+
+# Models / checkpoints
+checkpoints/
+models/
+*.pt
+*.pth
+
+# Logs / outputs
+wandb/
+logs/
+runs/
+outputs/
+
+# Playground notebook
+playground.ipynb
