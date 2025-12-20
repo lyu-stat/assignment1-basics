@@ -206,3 +206,12 @@ if __name__ == "__main__":
         d_ff=6400,
         model_name="GPT-2 small",
     )
+    output_resource_accounting(
+        vocab_size=10000,
+        context_length=256,
+        num_layers=4,
+        d_model=512,
+        num_heads=16,
+        d_ff=1344,
+        model_name="random testing model",
+    )

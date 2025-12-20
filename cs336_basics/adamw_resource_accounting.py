@@ -12,6 +12,7 @@ class AdamWResourceAccounting(TransformerResourceAccounting):
         num_layers: int,
         d_model: int,
         num_heads: int,
+        d_ff: int | None = None,
     ):
         """Initialize the Transformer resource accounting class.
 
@@ -27,7 +28,10 @@ class AdamWResourceAccounting(TransformerResourceAccounting):
         self.num_layers = num_layers
         self.d_model = d_model
         self.num_heads = num_heads
-        self.d_ff = 4 * d_model
+        if d_ff is not None:
+            self.d_ff = d_ff
+        else:
+            self.d_ff = 4 * d_model
         self.d_k = self.d_v = d_model // num_heads
         super().__init__(
             vocab_size,
@@ -184,12 +188,14 @@ class AdamWResourceAccounting(TransformerResourceAccounting):
 
 
 if __name__ == "__main__":
-    # GPT2-XL
-    VOCAB_SIZE = 50257
-    CONTEXT_LENGTH = 1024
-    NUM_LAYERS = 48
-    D_MODEL = 1600
-    NUM_HEADS = 25
+    VOCAB_SIZE = 10000
+    CONTEXT_LENGTH = 256
+    NUM_LAYERS = 4
+    D_MODEL = 512
+    NUM_HEADS = 16
+    D_FF = 1344
+    BATCH_SIZE = 512
+    NUM_STEP = 2500
 
     resource_accounting = AdamWResourceAccounting(
         vocab_size=VOCAB_SIZE,
@@ -197,6 +203,7 @@ if __name__ == "__main__":
         num_layers=NUM_LAYERS,
         d_model=D_MODEL,
         num_heads=NUM_HEADS,
+        d_ff=D_FF,
     )
 
     print(
@@ -204,8 +211,8 @@ if __name__ == "__main__":
         {resource_accounting.get_total_param_related_memory():.2f}"""
     )
     print(
-        f"""Total peak memory that AdamW requires for batch size 2 (GB):
-        {resource_accounting.get_activations_memory(batch_size=2) +
+        f"""Total peak memory that AdamW requires for batch size {BATCH_SIZE} (GB):
+        {resource_accounting.get_activations_memory(batch_size=BATCH_SIZE) +
          resource_accounting.get_total_param_related_memory():.2f}"""
     )
     print(
@@ -215,7 +222,7 @@ if __name__ == "__main__":
         {resource_accounting.get_training_time(
             mfu=0.5,
             peak_flops=19.5*1e12,
-            batch_size=1024,
-            num_steps=400_000,
-        ):.2f}"""
+            batch_size=BATCH_SIZE,
+            num_steps=NUM_STEP,
+        ):.4f}"""
     )

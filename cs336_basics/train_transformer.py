@@ -21,19 +21,10 @@ from cs336_basics.optimizer import (
 )
 
 
-INPUT_FILE = "cs336_basics/encoded_token_ids/TinyStories_train.npy"
-VAL_FRAC = 0.1  # Fraction of data to use for validation
-TRAINING_LOSS_LOGGING_INTERVAL = 100  # Log training loss every 100 steps
-VALIDATION_LOSS_LOGGING_INTERVAL = 1000  # Log validation loss every 1000 steps
-EVAL_ITERATIONS = 100  # Number of iterations to average validation loss over
-MAX_STEP = 100000  # Total number of training steps
-
 ## Model and Optimizer hyperparameters from the command line arguments
 parser = argparse.ArgumentParser(description="Train a Transformer Language Model.")
 # Training data file
-parser.add_argument(
-    "--input_file", type=str, default=INPUT_FILE, help="Path to training data."
-)
+parser.add_argument("--input_file", type=str, help="Path to training data.")
 # Model hyperparameters
 parser.add_argument(
     "--vocab_size", type=int, default=10000, help="Vocabulary size of the model."
@@ -59,7 +50,7 @@ parser.add_argument(
 )
 # Optimizer hyperparameters
 parser.add_argument(
-    "--max_steps", type=int, default=MAX_STEP, help="Number of training steps."
+    "--max_steps", type=int, default=10000, help="Number of training steps."
 )
 parser.add_argument(
     "--weight_decay",
@@ -79,13 +70,36 @@ parser.add_argument(
 )
 parser.add_argument("--lr_max", type=float, default=3e-4, help="Maximum learning rate.")
 parser.add_argument("--lr_min", type=float, default=3e-5, help="Minimum learning rate.")
+parser.add_argument("--w_step", type=int, default=300, help="Warm-up steps.")
+parser.add_argument("--c_step", type=int, default=10000, help="Cosine annealing steps.")
+# Logging and checkpointing
 parser.add_argument(
-    "--w_step", type=int, default=0.03 * MAX_STEP, help="Warm-up steps."
+    "--val_fraction", type=float, default=0.1, help="Fraction of data for validation."
 )
 parser.add_argument(
-    "--c_step", type=int, default=MAX_STEP, help="Cosine annealing steps."
+    "--training_loss_interval",
+    type=int,
+    default=10,
+    help="Interval for logging training loss.",
 )
-# Checkpoint location
+parser.add_argument(
+    "--validation_loss_interval",
+    type=int,
+    default=100,
+    help="Interval for logging validation loss.",
+)
+parser.add_argument(
+    "--checkpoint_interval",
+    type=int,
+    default=1000,
+    help="Interval for saving model checkpoints.",
+)
+parser.add_argument(
+    "--eval_iterations",
+    type=int,
+    default=100,
+    help="Number of iterations to average validation loss over.",
+)
 parser.add_argument(
     "--checkpoint_to_load",
     type=str,
@@ -124,7 +138,7 @@ optimizer = AdamW(
 )
 
 # Split training and validation datasets
-split_idx = int(len(dataset) * (1 - VAL_FRAC))
+split_idx = int(len(dataset) * (1 - args.val_fraction))
 train_dataset = dataset[:split_idx]
 val_dataset = dataset[split_idx:]
 
@@ -169,15 +183,15 @@ for t in range(start_step, args.max_steps + 1):
         param_group["lr"] = lr
     optimizer.step()
 
-    # Print training loss every 100 steps
-    if t % 100 == 0:
+    # Log training loss
+    if t % args.training_loss_interval == 0:
         run.log({"training_loss": loss.item(), "step": t})
         print(f"Step {t}: Loss = {loss.item():.4f}")
 
-    # Print validation loss every 1000 steps
-    if t % 1000 == 0:
+    # Log validation loss
+    if t % args.validation_loss_interval == 0:
         validation_loss, perplexity = estimate_val_loss(
-            EVAL_ITERATIONS,
+            args.eval_iterations,
             val_dataset,
             args.batch_size,
             args.context_length,
@@ -194,7 +208,7 @@ for t in range(start_step, args.max_steps + 1):
         print(f"Step {t}: Validation Loss = {validation_loss:.4f}")
 
     # Save checkpoints and the final model
-    if t % 1000 == 0:
+    if t % args.checkpoint_interval == 0:
         if t == args.max_steps:
             save_checkpoint(
                 transformer_model,
