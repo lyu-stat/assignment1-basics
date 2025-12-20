@@ -100,6 +100,7 @@ parser.add_argument(
     default=100,
     help="Number of iterations to average validation loss over.",
 )
+parser.add_argument("--checkpoint_dir", type=str, help="Directory to save checkpoints.")
 parser.add_argument(
     "--checkpoint_to_load",
     type=str,
@@ -159,7 +160,7 @@ if args.checkpoint_to_load:
     checkpoint_path = os.path.dirname(args.checkpoint_to_load)
 else:
     checkpoint_path = make_checkpoint_dir(
-        run, "transformer", "TinyStories", "./cs336_basics/checkpoints"
+        run, "transformer", "TinyStories", args.checkpoint_dir
     )
 
 # Training loop
