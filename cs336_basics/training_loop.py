@@ -44,6 +44,7 @@ def save_checkpoint(
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
     iteration: int,
+    run_id: str,
     out: str | PathLike | BinaryIO | IO[bytes],
 ) -> None:
     """Saves a model checkpoint.
@@ -52,12 +53,14 @@ def save_checkpoint(
         model (nn.Module): the model to save.
         optimizer (torch.optim.Optimizer): the optimizer to save.
         iteration (int): the current training iteration.
+        run_id (str): the wandb run id.
         out (str): the output file path.
     """
     checkpoint = {
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "iteration": iteration,
+        "run_id": run_id,
     }
     torch.save(checkpoint, out)
     print(f"Checkpoint saved to {out} at iteration {iteration}.")
@@ -67,7 +70,7 @@ def load_checkpoint(
     src: str | PathLike | BinaryIO | IO[bytes],
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
-) -> int:
+) -> tuple[int, str]:
     """Loads a model checkpoint.
 
     Args:
@@ -76,13 +79,13 @@ def load_checkpoint(
         optimizer (torch.optim.Optimizer): the optimizer to load.
 
     Returns:
-        int: the iteration when the checkpoint was taken.
+        tuple[int, str]: a tuple containing the iteration and wandb run id.
     """
     checkpoint = torch.load(src)
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     print(f"Checkpoint loaded from {src} at iteration {checkpoint['iteration']}.")
-    return checkpoint["iteration"]
+    return checkpoint["iteration"], checkpoint["run_id"]
 
 
 def make_checkpoint_dir(run, model_name: str, dataset: str, base_dir: str) -> str:

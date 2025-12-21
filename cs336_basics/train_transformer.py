@@ -145,17 +145,26 @@ val_dataset = dataset[split_idx:]
 
 # Load checkpoint if provided
 start_step = 1
+run_id = ""
 if args.checkpoint_to_load:
-    start_step = (
-        load_checkpoint(args.checkpoint_to_load, transformer_model, optimizer) + 1
+    start_step, run_id = load_checkpoint(
+        args.checkpoint_to_load, transformer_model, optimizer
     )
+    start_step = start_step + 1
     assert start_step <= args.max_steps, "Checkpoint step exceeds max steps."
 
 # Initialize Weights & Biases logging
-run = wandb.init(
-    project="cs336-basics-transformer-training",
-    config=vars(args),
-)
+if run_id:
+    run = wandb.init(
+        project="cs336-basics-transformer-training",
+        id=run_id,
+        resume="must",
+    )
+else:
+    run = wandb.init(
+        project="cs336-basics-transformer-training",
+        config=vars(args),
+    )
 if args.checkpoint_to_load:
     checkpoint_path = os.path.dirname(args.checkpoint_to_load)
 else:
@@ -186,7 +195,7 @@ for t in range(start_step, args.max_steps + 1):
 
     # Log training loss
     if t % args.training_loss_interval == 0:
-        run.log({"training_loss": loss.item(), "step": t})
+        run.log({"training_loss": loss.item()}, step=t)
         print(f"Step {t}: Loss = {loss.item():.4f}")
 
     # Log validation loss
@@ -203,8 +212,8 @@ for t in range(start_step, args.max_steps + 1):
             {
                 "validation_loss": validation_loss,
                 "perplexity": perplexity,
-                "step": t,
-            }
+            },
+            step=t,
         )
         print(f"Step {t}: Validation Loss = {validation_loss:.4f}")
 
@@ -215,6 +224,7 @@ for t in range(start_step, args.max_steps + 1):
                 transformer_model,
                 optimizer,
                 t,
+                run.id,
                 f"{checkpoint_path}/final_model.pt",
             )
             print("Final model saved.")
@@ -223,6 +233,7 @@ for t in range(start_step, args.max_steps + 1):
                 transformer_model,
                 optimizer,
                 t,
+                run.id,
                 f"{checkpoint_path}/checkpoint_step_{t}.pt",
             )
 
