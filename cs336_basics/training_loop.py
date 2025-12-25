@@ -127,20 +127,18 @@ def estimate_val_loss(
     Returns:
         tuple[float, float]: a tuple containing the average validation loss and perplexity.
     """
-    val_inputs, val_targets = data_loading(
-        val_dataset, batch_size, context_length, device
-    )
-    val_losses = []
-    with torch.no_grad():
+    total_loss = 0.0
+    with torch.no_grad():  # Ask PyTorch not to create computation graphs
         for _ in range(eval_iters):
+            val_inputs, val_targets = data_loading(
+                val_dataset, batch_size, context_length, device
+            )
             val_logits = model(val_inputs)
             val_loss = compute_cross_entropy(val_logits, val_targets)
-            val_losses.append(val_loss.item())
+            total_loss += float(val_loss.item())
     if perplexity:
-        return sum(val_losses) / len(val_losses), math.exp(
-            sum(val_losses) / len(val_losses)
-        )
-    return sum(val_losses) / len(val_losses), 0.0
+        return total_loss / eval_iters, math.exp(total_loss / eval_iters)
+    return total_loss / eval_iters, 0.0
 
 
 def gradient_clipping(params: list[nn.Parameter], max_norm: float) -> None:
