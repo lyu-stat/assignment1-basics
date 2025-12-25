@@ -6,18 +6,21 @@ import numpy as np
 import torch
 import wandb
 from cs336_basics.training_loop import (
+    gradient_clipping,
     data_loading,
     save_checkpoint,
     load_checkpoint,
     make_checkpoint_dir,
     estimate_val_loss,
+    ActivationNormTracker,
+    compute_gradient_norms,
+    compute_parameter_norms,
 )
 from cs336_basics.transformer import TransformerLM
 from cs336_basics.optimizer import (
     compute_cross_entropy,
     AdamW,
     learning_rate_schedule,
-    gradient_clipping,
 )
 
 
@@ -93,6 +96,12 @@ parser.add_argument(
     type=int,
     default=1000,
     help="Interval for saving model checkpoints.",
+)
+parser.add_argument(
+    "--norm_interval",
+    type=int,
+    default=10,
+    help="Interval for logging activation, gradient, and parameter norms.",
 )
 parser.add_argument(
     "--eval_iterations",
@@ -172,6 +181,10 @@ else:
         run, "transformer", "TinyStories", args.checkpoint_dir
     )
 
+# Initialize activation norm tracker
+activation_norm_tracker = ActivationNormTracker(transformer_model)
+model_parameters = list(transformer_model.parameters())
+
 # Training loop
 for t in range(start_step, args.max_steps + 1):
     # Get batch data
@@ -180,17 +193,24 @@ for t in range(start_step, args.max_steps + 1):
     )
 
     # Forward pass and compute loss
+    activation_norm_tracker.reset()
     logits = transformer_model(inputs)
+    logits_rms_norm = torch.sqrt(torch.mean(logits**2)).item()
+    activation_rms_norm = activation_norm_tracker.get_rms_norm()
     loss = compute_cross_entropy(logits, targets)
 
     # Backward pass
     optimizer.zero_grad()
     loss.backward()
-    gradient_clipping(list(transformer_model.parameters()), args.max_norm)
+    gradient_l2_norm, gradient_rms_norm = compute_gradient_norms(model_parameters)
+    gradient_clipping(model_parameters, args.max_norm)
+    parameter_l2_norm, parameter_rms_norm = compute_parameter_norms(model_parameters)
+
     # Adjust learning rate
     lr = learning_rate_schedule(t, args.lr_max, args.lr_min, args.w_step, args.c_step)
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
+
     optimizer.step()
 
     # Log training loss
@@ -217,6 +237,20 @@ for t in range(start_step, args.max_steps + 1):
         )
         print(f"Step {t}: Validation Loss = {validation_loss:.4f}")
 
+    # Log norms
+    if t % args.norm_interval == 0:
+        run.log(
+            {
+                "gradient_l2_norm": gradient_l2_norm,
+                "gradient_rms_norm": gradient_rms_norm,
+                "parameter_l2_norm": parameter_l2_norm,
+                "parameter_rms_norm": parameter_rms_norm,
+                "activation_rms_norm": activation_rms_norm,
+                "logits_rms_norm": logits_rms_norm,
+            },
+            step=t,
+        )
+
     # Save checkpoints and the final model
     if t % args.checkpoint_interval == 0:
         if t == args.max_steps:
@@ -238,4 +272,5 @@ for t in range(start_step, args.max_steps + 1):
             )
 
 # Finish Weights & Biases run
+activation_norm_tracker.close()
 run.finish()

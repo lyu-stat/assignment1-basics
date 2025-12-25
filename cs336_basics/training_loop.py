@@ -1,11 +1,11 @@
 import os
+from typing import BinaryIO, IO, Iterable
+from os import PathLike
 import time
 import math
-import torch
 import numpy as np
+import torch
 from torch import nn
-from typing import BinaryIO, IO
-from os import PathLike
 from cs336_basics.optimizer import compute_cross_entropy
 
 
@@ -137,3 +137,163 @@ def estimate_val_loss(
     return sum(val_losses) / len(val_losses), math.exp(
         sum(val_losses) / len(val_losses)
     )
+
+
+def gradient_clipping(params: list[nn.Parameter], max_norm: float) -> None:
+    """Clip the gradients of the given parameters to have a maximum norm of max_norm.
+
+    Args:
+        params (list[torch.Tensor]): list of the model parameters
+        max_norm (float): maximum allowed norm for the gradients
+    """
+    total_norm = 0.0
+    for p in params:
+        grad = p.grad
+        if grad is not None:
+            grad_norm = torch.norm(grad).item()
+            total_norm += grad_norm**2
+    total_norm = math.sqrt(total_norm)
+
+    if total_norm > max_norm:
+        clip_coef = max_norm / (total_norm + 1e-6)
+        for p in params:
+            if p.grad is not None:  # Be safe for in-place operations
+                p.grad *= clip_coef
+
+
+def _accumulate_tensor_stats(
+    tensor: torch.Tensor, tss: float, total_numel: int
+) -> tuple[float, int]:
+    """Accumulate the total sum of squares of the elements of the tensor
+    and accumulate the total number of elements.
+
+    Args:
+        tensor (torch.Tensor): input tensor.
+        tss (float): total sum of squares accumulated so far.
+        total_numel (int): total number of elements counted so far.
+
+    Returns:
+        tuple[float, int]: a tuple containing the updated total sum of squares
+          and total number of elements.
+    """
+    # Detach tensor from computation graph and convert to float32 for numerical stability
+    tensor_float = tensor.detach().to(torch.float32)
+    tss += torch.sum(tensor_float**2).item()
+    total_numel += tensor_float.numel()
+    return tss, total_numel
+
+
+def compute_parameter_norms(parameters: Iterable[nn.Parameter]) -> tuple[float, float]:
+    """Compute L2 norm and RMS norm for all model parameters combined.
+
+    Args:
+        parameters (Iterable[nn.Parameter]): parameters of the model.
+
+    Returns:
+        tuple[float, float]: a tuple containing the L2 norm and RMS norm.
+    """
+    tss = 0.0
+    total_numel = 0
+    for param in parameters:
+        tss, total_numel = _accumulate_tensor_stats(param, tss, total_numel)
+    l2_norm = math.sqrt(tss)
+    rms_norm = math.sqrt(tss / total_numel) if total_numel > 0 else 0.0
+    return l2_norm, rms_norm
+
+
+def compute_gradient_norms(parameters: Iterable[nn.Parameter]) -> tuple[float, float]:
+    """Compute L2 norm and RMS norm for all gradients combined.
+
+    Args:
+        parameters (Iterable[nn.Parameter]): parameters of the model.
+
+    Returns:
+        tuple[float, float]: a tuple containing the L2 norm and RMS norm of the gradients.
+    """
+    tss = 0.0
+    total_numel = 0
+    for param in parameters:
+        if param.grad is not None:
+            tss, total_numel = _accumulate_tensor_stats(param.grad, tss, total_numel)
+    l2_norm = math.sqrt(tss)
+    rms_norm = math.sqrt(tss / total_numel) if total_numel > 0 else 0.0
+    return l2_norm, rms_norm
+
+
+def _accumulate_output_stats(
+    output: object, tss: float, total_numel: int
+) -> tuple[float, int]:
+    """Accumulate the total sum of squares of all tensors within the output and
+    accumulate total number of elements within the output
+
+    Args:
+        output (object): output from a forward hook.
+        tss (float): total sum of squares accumulated so far.
+        total_numel (int): total number of elements counted so far.
+
+    Returns:
+        tuple[float, int]: a tuple containing the updated total sum of squares
+          and total number of elements.
+    """
+    if torch.is_tensor(output):
+        return _accumulate_tensor_stats(output, tss, total_numel)
+    if isinstance(output, (tuple, list)):
+        for item in output:
+            tss, total_numel = _accumulate_output_stats(item, tss, total_numel)
+    if isinstance(output, dict):
+        for item in output.values():
+            tss, total_numel = _accumulate_output_stats(item, tss, total_numel)
+    return tss, total_numel
+
+
+class ActivationNormTracker:
+    """Track RMS norm of all activations combined during training."""
+
+    def __init__(self, model: nn.Module) -> None:
+        """Initialize the activation norm tracker.
+
+        Args:
+            model (nn.Module): model to track activations for.
+        """
+        self._handles = []
+        self._tss = 0.0
+        self._total_numel = 0
+        for name, module in model.named_modules():
+            if not name:
+                continue  # Skip the top-level module
+            if len(list(module.children())) > 0:
+                continue  # Skip non-leaf modules
+            self._handles.append(module.register_forward_hook(self._hook))
+
+    def _hook(self, module: nn.Module, input: tuple, output: torch.Tensor) -> None:
+        """The hook function to register to the module.
+
+        Args:
+            module (nn.Module): module being hooked.
+            input (tuple): inputs to the module.
+            output (torch.Tensor): output from the module.
+        """
+        self._tss, self._total_numel = _accumulate_output_stats(
+            output, self._tss, self._total_numel
+        )
+
+    def reset(self) -> None:
+        """Reset the tracker statistics."""
+        self._tss = 0.0
+        self._total_numel = 0
+
+    def get_rms_norm(self) -> float:
+        """Get the RMS norm of the tracked activations.
+
+        Returns:
+            float: RMS norm of the tracked activations.
+        """
+        return (
+            math.sqrt(self._tss / self._total_numel) if self._total_numel > 0 else 0.0
+        )
+
+    def close(self) -> None:
+        """Remove all registered hooks."""
+        for handle in self._handles:
+            handle.remove()
+        self._handles = []

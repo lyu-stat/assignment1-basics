@@ -1,6 +1,6 @@
-import torch
+from typing import Callable, Iterable
 import math
-from collections.abc import Callable, Iterable
+import torch
 
 
 def compute_cross_entropy(
@@ -124,25 +124,3 @@ def learning_rate_schedule(
     if t >= c_step:
         lr = lr_min
     return lr
-
-
-def gradient_clipping(params: list[torch.Tensor], max_norm: float) -> None:
-    """Clip the gradients of the given parameters to have a maximum norm of max_norm.
-
-    Args:
-        params (list[torch.Tensor]): list of the model parameters
-        max_norm (float): maximum allowed norm for the gradients
-    """
-    total_norm = 0.0
-    for p in params:
-        grad = p.grad
-        if grad is not None:
-            grad_norm = torch.norm(grad)
-            total_norm += grad_norm**2
-    total_norm = torch.sqrt(total_norm)
-
-    if total_norm > max_norm:
-        clip_coef = max_norm / (total_norm + 1e-6)
-        for p in params:
-            if p.grad is not None:  # Be safe for in-place operations
-                p.grad *= clip_coef
