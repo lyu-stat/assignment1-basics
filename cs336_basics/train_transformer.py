@@ -92,6 +92,11 @@ parser.add_argument(
     help="Interval for logging validation loss.",
 )
 parser.add_argument(
+    "--perplexity",
+    action="store_true",
+    help="Whether to log perplexity along with validation loss.",
+)
+parser.add_argument(
     "--checkpoint_interval",
     type=int,
     default=1000,
@@ -227,6 +232,7 @@ for t in range(start_step, args.max_steps + 1):
             args.context_length,
             transformer_model,
             training_device,
+            args.perplexity,
         )
         run.log(
             {

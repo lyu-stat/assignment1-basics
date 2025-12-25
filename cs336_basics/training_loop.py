@@ -113,6 +113,7 @@ def estimate_val_loss(
     context_length: int,
     model: nn.Module,
     device: torch.device,
+    perplexity: bool,
 ) -> tuple[float, float]:
     """Estimate the validation loss over a number of iterations.
     Args:
@@ -122,6 +123,7 @@ def estimate_val_loss(
         context_length (int): context length for evaluation.
         model (nn.Module): the model to evaluate.
         device (torch.device): device to perform evaluation on.
+        perplexity (bool): whether or not to calculate perplexity.
     Returns:
         tuple[float, float]: a tuple containing the average validation loss and perplexity.
     """
@@ -134,9 +136,11 @@ def estimate_val_loss(
             val_logits = model(val_inputs)
             val_loss = compute_cross_entropy(val_logits, val_targets)
             val_losses.append(val_loss.item())
-    return sum(val_losses) / len(val_losses), math.exp(
-        sum(val_losses) / len(val_losses)
-    )
+    if perplexity:
+        return sum(val_losses) / len(val_losses), math.exp(
+            sum(val_losses) / len(val_losses)
+        )
+    return sum(val_losses) / len(val_losses), 0.0
 
 
 def gradient_clipping(params: list[nn.Parameter], max_norm: float) -> None:
