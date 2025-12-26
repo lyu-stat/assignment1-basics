@@ -299,3 +299,62 @@ class ActivationNormTracker:
         for handle in self._handles:
             handle.remove()
         self._handles = []
+
+
+class ActivationPerModuleNormTracker:
+    """Track RMS norm of the activation of each module during model training."""
+
+    def __init__(self, model: nn.Module) -> None:
+        """Initialize the per-module activation norm tracker.
+
+        Args:
+            model (nn.Module): model to track activations for.
+        """
+        self._handles = []
+        self._module_stats = {}
+        for name, module in model.named_modules():
+            if not name:
+                continue  # Skip the top-level module
+            self._module_stats[name] = {"tss": 0.0, "total_numel": 0}
+            self._handles.append(module.register_forward_hook(self._make_hook(name)))
+
+    def _make_hook(self, module_name: str):
+        """Make the hook function for the given module.
+
+        Args:
+            module_name (str): name of the module to make the hook for.
+        """
+
+        def _hook(module: nn.Module, input: tuple, output: torch.Tensor) -> None:
+            stats = self._module_stats[module_name]
+            stats["tss"], stats["total_numel"] = _accumulate_output_stats(
+                output, stats["tss"], stats["total_numel"]
+            )
+
+        return _hook
+
+    def reset(self) -> None:
+        """Reset the tracker statistics."""
+        for stats in self._module_stats.values():
+            stats["tss"] = 0.0
+            stats["total_numel"] = 0
+
+    def get_rms_norms(self) -> dict[str, float]:
+        """Get the RMS norm of the tracked activations for each module.
+
+        Returns:
+            dict[str, float]: a dictionary mapping module names to their RMS norms.
+        """
+        rms_norms = {}
+        for name, stats in self._module_stats.items():
+            total_numel = stats["total_numel"]
+            rms_norms[name] = (
+                math.sqrt(stats["tss"] / total_numel) if total_numel > 0 else 0.0
+            )
+        return rms_norms
+
+    def close(self) -> None:
+        """Remove all registered hooks."""
+        for handle in self._handles:
+            handle.remove()
+        self._handles = []

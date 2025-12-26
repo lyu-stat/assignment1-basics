@@ -13,6 +13,7 @@ from cs336_basics.training_loop import (
     make_checkpoint_dir,
     estimate_val_loss,
     ActivationNormTracker,
+    ActivationPerModuleNormTracker,
     compute_gradient_norms,
     compute_parameter_norms,
 )
@@ -116,6 +117,9 @@ parser.add_argument(
 )
 parser.add_argument("--checkpoint_dir", type=str, help="Directory to save checkpoints.")
 parser.add_argument(
+    "--dataset_name", type=str, default="TinyStories", help="Name of the dataset."
+)
+parser.add_argument(
     "--checkpoint_to_load",
     type=str,
     default="",
@@ -183,11 +187,12 @@ if args.checkpoint_to_load:
     checkpoint_path = os.path.dirname(args.checkpoint_to_load)
 else:
     checkpoint_path = make_checkpoint_dir(
-        run, "transformer", "TinyStories", args.checkpoint_dir
+        run, "transformer", args.dataset_name, args.checkpoint_dir
     )
 
 # Initialize activation norm tracker
 activation_norm_tracker = ActivationNormTracker(transformer_model)
+activation_per_module_norm_tracker = ActivationPerModuleNormTracker(transformer_model)
 model_parameters = list(transformer_model.parameters())
 
 # Training loop
@@ -199,9 +204,11 @@ for t in range(start_step, args.max_steps + 1):
 
     # Forward pass and compute loss
     activation_norm_tracker.reset()
+    activation_per_module_norm_tracker.reset()
     logits = transformer_model(inputs)
     logits_rms_norm = torch.sqrt(torch.mean(logits**2)).item()
     activation_rms_norm = activation_norm_tracker.get_rms_norm()
+    activation_per_module_rms_norms = activation_per_module_norm_tracker.get_rms_norms()
     loss = compute_cross_entropy(logits, targets)
 
     # Backward pass
@@ -245,6 +252,10 @@ for t in range(start_step, args.max_steps + 1):
 
     # Log norms
     if t % args.norm_interval == 0:
+        activation_per_module_rms_norms_payload = {
+            f"activation_rms_norm/{module_name}": norm
+            for module_name, norm in activation_per_module_rms_norms.items()
+        }
         run.log(
             {
                 "gradient_l2_norm": gradient_l2_norm,
@@ -253,6 +264,7 @@ for t in range(start_step, args.max_steps + 1):
                 "parameter_rms_norm": parameter_rms_norm,
                 "activation_rms_norm": activation_rms_norm,
                 "logits_rms_norm": logits_rms_norm,
+                **activation_per_module_rms_norms_payload,
             },
             step=t,
         )
@@ -277,6 +289,7 @@ for t in range(start_step, args.max_steps + 1):
                 f"{checkpoint_path}/checkpoint_step_{t}.pt",
             )
 
-# Finish Weights & Biases run
+# Remove the hooks and finish Weights & Biases run
 activation_norm_tracker.close()
+activation_per_module_norm_tracker.close()
 run.finish()
