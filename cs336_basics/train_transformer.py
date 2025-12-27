@@ -223,15 +223,13 @@ for t in range(start_step, args.max_steps + 1):
     for param_group in optimizer.param_groups:
         param_group["lr"] = lr
 
-    optimizer.step()
-
     # Log training loss
-    if t % args.training_loss_interval == 0:
+    if (t == 1) or (t % args.training_loss_interval == 0):
         run.log({"training_loss": loss.item()}, step=t)
         print(f"Step {t}: Loss = {loss.item():.4f}")
 
     # Log validation loss
-    if t % args.validation_loss_interval == 0:
+    if (t == 1) or (t % args.validation_loss_interval == 0):
         validation_loss, perplexity = estimate_val_loss(
             args.eval_iterations,
             val_dataset,
@@ -251,7 +249,7 @@ for t in range(start_step, args.max_steps + 1):
         print(f"Step {t}: Validation Loss = {validation_loss:.4f}")
 
     # Log norms
-    if t % args.norm_interval == 0:
+    if (t == 1) or (t % args.norm_interval == 0):
         activation_per_module_rms_norms_payload = {
             f"activation_rms_norm/{module_name}": norm
             for module_name, norm in activation_per_module_rms_norms.items()
@@ -268,6 +266,9 @@ for t in range(start_step, args.max_steps + 1):
             },
             step=t,
         )
+
+    # Update model parameters
+    optimizer.step()
 
     # Save checkpoints and the final model
     if t % args.checkpoint_interval == 0:
