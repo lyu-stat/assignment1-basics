@@ -13,7 +13,7 @@ def generate_text(
     max_length: int,
     temperature: float = 1.0,
     p: float = 1.0,
-    eos_token: bytes = b"<|endoftext|>",
+    eos_token: str = "<|endoftext|>",
 ) -> str:
     """Generate completions from the trained language model given
     the user-provided prompt.
@@ -25,6 +25,7 @@ def generate_text(
         max_length (int): maximum number of the generated tokens.
         temperature (float): temperature parameter for sampling.
         p (float): threshold parameter for top-p sampling.
+        eos_token (str): end-of-sequence token.
 
     Returns:
         str: decoded completions.
@@ -99,6 +100,27 @@ if __name__ == "__main__":
         "--prompt", type=str, required=True, help="The prompt text to start generation."
     )
     parser.add_argument(
+        "--context_length",
+        type=int,
+        default=128,
+        help="Context length of the model.",
+    )
+    parser.add_argument(
+        "--d_model", type=int, default=64, help="Dimension of the model."
+    )
+    parser.add_argument(
+        "--num_layers", type=int, default=48, help="Number of transformer layers."
+    )
+    parser.add_argument(
+        "--num_heads", type=int, default=8, help="Number of attention heads."
+    )
+    parser.add_argument(
+        "--theta", type=float, default=1e4, help="Theta hyperparameter for RoPE."
+    )
+    parser.add_argument(
+        "--d_ff", type=int, default=256, help="Dimension of the feedforward layer."
+    )
+    parser.add_argument(
         "--max_length",
         type=int,
         default=100,
@@ -132,11 +154,11 @@ if __name__ == "__main__":
     )
     trained_model = TransformerLM(
         vocab_size=trained_tokenizer.vocab_size,
-        context_length=128,
-        d_model=64,
-        num_layers=48,
-        num_heads=8,
-        theta=1e4,
+        context_length=args.context_length,
+        d_model=args.d_model,
+        num_layers=args.num_layers,
+        num_heads=args.num_heads,
+        theta=args.theta,
     ).to(generation_device)
     checkpoint = torch.load(args.model_checkpoint, map_location=generation_device)
     trained_model.load_state_dict(checkpoint["model_state_dict"])
