@@ -399,12 +399,14 @@ class TransformerBlock(nn.Module):
         # mhsa_output = self.mhsa(x_normed1, token_positions)
         mhsa_output = self.mhsa(x, token_positions)
         x = x + mhsa_output
+        x = self.rmsnorm1(x)
 
         # Position-wise feedforward sublayer
         # x_normed2 = self.rmsnorm2(x)
         # ffn_output = self.ffn(x_normed2)
         ffn_output = self.ffn(x)
         x = x + ffn_output
+        x = self.rmsnorm2(x)
 
         return x
 
@@ -476,7 +478,7 @@ class TransformerLM(nn.Module):
             x = layer(x, token_positions)
 
         # Final RMSNorm
-        # x = self.rmsnorm_final(x)
+        x = self.rmsnorm_final(x)
 
         # Output projection to vocabulary size
         return self.output_projection(x)
