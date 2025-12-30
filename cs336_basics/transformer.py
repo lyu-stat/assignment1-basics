@@ -339,8 +339,8 @@ class MultiHeadSelfAttention(nn.Module):
         # When apply RoPE to both Q and K, their relative positional information
         # is encoded in the dot product QK^T, via the mathematical properties of RoPE -
         # (Rtqt)^T(Rsks) = qt^TR(t-s)ks.
-        q_heads = self.rope(q_heads, token_positions)
-        k_heads = self.rope(k_heads, token_positions)
+        # q_heads = self.rope(q_heads, token_positions)
+        # k_heads = self.rope(k_heads, token_positions)
 
         # Compute scaled dot-product attention for each head
         attention_outputs = self._scaled_dot_product_attention(
@@ -395,18 +395,14 @@ class TransformerBlock(nn.Module):
             torch.Tensor: output tensor of shape (batch_size, sequence_length, d_model).
         """
         # Multi-head self-attention sublayer
-        # x_normed1 = self.rmsnorm1(x)
-        # mhsa_output = self.mhsa(x_normed1, token_positions)
-        mhsa_output = self.mhsa(x, token_positions)
+        x_normed1 = self.rmsnorm1(x)
+        mhsa_output = self.mhsa(x_normed1, token_positions)
         x = x + mhsa_output
-        x = self.rmsnorm1(x)
 
         # Position-wise feedforward sublayer
-        # x_normed2 = self.rmsnorm2(x)
-        # ffn_output = self.ffn(x_normed2)
-        ffn_output = self.ffn(x)
+        x_normed2 = self.rmsnorm2(x)
+        ffn_output = self.ffn(x_normed2)
         x = x + ffn_output
-        x = self.rmsnorm2(x)
 
         return x
 
