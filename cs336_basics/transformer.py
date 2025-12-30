@@ -155,9 +155,12 @@ class PositionWiseFeedForward(nn.Module):
         Returns:
             torch.Tensor: output tensor of shape (batch_size, sequence_length, d_model).
         """
+        # z1 = x @ self.weight1.T
+        # z3 = x @ self.weight3.T
+        # a1 = self._silu(z1) * z3
+        # return a1 @ self.weight2.T
         z1 = x @ self.weight1.T
-        z3 = x @ self.weight3.T
-        a1 = self._silu(z1) * z3
+        a1 = self._silu(z1)
         return a1 @ self.weight2.T
 
 
@@ -339,8 +342,8 @@ class MultiHeadSelfAttention(nn.Module):
         # When apply RoPE to both Q and K, their relative positional information
         # is encoded in the dot product QK^T, via the mathematical properties of RoPE -
         # (Rtqt)^T(Rsks) = qt^TR(t-s)ks.
-        # q_heads = self.rope(q_heads, token_positions)
-        # k_heads = self.rope(k_heads, token_positions)
+        q_heads = self.rope(q_heads, token_positions)
+        k_heads = self.rope(k_heads, token_positions)
 
         # Compute scaled dot-product attention for each head
         attention_outputs = self._scaled_dot_product_attention(
