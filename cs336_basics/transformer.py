@@ -155,12 +155,9 @@ class PositionWiseFeedForward(nn.Module):
         Returns:
             torch.Tensor: output tensor of shape (batch_size, sequence_length, d_model).
         """
-        # z1 = x @ self.weight1.T
-        # z3 = x @ self.weight3.T
-        # a1 = self._silu(z1) * z3
-        # return a1 @ self.weight2.T
         z1 = x @ self.weight1.T
-        a1 = self._silu(z1)
+        z3 = x @ self.weight3.T
+        a1 = self._silu(z1) * z3
         return a1 @ self.weight2.T
 
 
