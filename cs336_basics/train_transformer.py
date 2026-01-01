@@ -29,6 +29,9 @@ from cs336_basics.optimizer import (
 parser = argparse.ArgumentParser(description="Train a Transformer Language Model.")
 # Training data file
 parser.add_argument("--input_file", type=str, help="Path to training data.")
+parser.add_argument(
+    "--valid_file", type=str, default="", help="Path to validation data."
+)
 # Model hyperparameters
 parser.add_argument(
     "--vocab_size", type=int, default=10000, help="Vocabulary size of the model."
@@ -157,9 +160,13 @@ optimizer = AdamW(
 )
 
 # Split training and validation datasets
-split_idx = int(len(dataset) * (1 - args.val_fraction))
-train_dataset = dataset[:split_idx]
-val_dataset = dataset[split_idx:]
+if args.valid_file:
+    val_dataset = np.load(args.valid_file, mmap_mode="r")
+    train_dataset = dataset
+else:
+    split_idx = int(len(dataset) * (1 - args.val_fraction))
+    train_dataset = dataset[:split_idx]
+    val_dataset = dataset[split_idx:]
 
 # Load checkpoint if provided
 start_step = 1
