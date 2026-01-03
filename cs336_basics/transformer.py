@@ -55,7 +55,9 @@ class Embedding(nn.Module):
         """
         super().__init__()
         self.weight = nn.Parameter(torch.empty((num_embeddings, embedding_dim)))
-        nn.init.trunc_normal_(self.weight, mean=0, std=1, a=-3, b=3)
+        # nn.init.trunc_normal_(self.weight, mean=0, std=1, a=-3, b=3)
+        std = 1.0 / np.sqrt(embedding_dim)
+        nn.init.trunc_normal_(self.weight, mean=0, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         """Lookup embeddings for the given token IDs.
@@ -479,4 +481,4 @@ class TransformerLM(nn.Module):
         x = self.rmsnorm_final(x)
 
         # Output projection to vocabulary size
-        return self.output_projection(x) / self.d_model**0.5  # Scale logits
+        return self.output_projection(x)
