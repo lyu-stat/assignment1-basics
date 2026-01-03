@@ -433,6 +433,7 @@ class TransformerLM(nn.Module):
         """
         super().__init__()
         self.context_length = context_length
+        self.d_model = d_model
         self.token_embedding = Embedding(vocab_size, d_model)
         if d_ff is None:
             self.d_ff = d_model * 4
@@ -478,4 +479,4 @@ class TransformerLM(nn.Module):
         x = self.rmsnorm_final(x)
 
         # Output projection to vocabulary size
-        return self.output_projection(x)
+        return self.output_projection(x) / self.d_model**0.5  # Scale logits
