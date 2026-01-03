@@ -452,6 +452,7 @@ class TransformerLM(nn.Module):
         )
         self.rmsnorm_final = RMSNorm(d_model)
         self.output_projection = Linear(d_model, vocab_size)
+        self.output_projection.weight = self.token_embedding.weight  # Weight tying
 
     def forward(
         self, x: torch.Tensor, token_positions: torch.Tensor | None = None
